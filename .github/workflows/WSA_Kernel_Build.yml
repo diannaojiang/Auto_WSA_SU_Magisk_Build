@@ -133,12 +133,12 @@ jobs:
       - name: 打包文件... (Repack files to zip)
         run: |
           if [[ steps.var.outputs.SuperUser == 'true' ]]; then
-            su=SU
+            su=-SU
           fi
           if [[ steps.var.outputs.Magisk == 'true' ]]; then
             mag=-Magisk
           fi
-          echo 'WSA-'$su$mag'.zip' > temp.txt
+          echo 'WSA'$su$mag'.zip' > temp.txt
           echo "file=$(cat temp.txt)" >> $GITHUB_ENV
           zip -q -r ${{ env.file }} done/*
 
