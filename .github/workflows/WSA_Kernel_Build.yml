@@ -19,6 +19,7 @@ jobs:
           sudo apt install -y bc bison build-essential ccache curl libelf-dev flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev imagemagick libbz2-dev libssl-dev lzma ncftp bash-completion python3 python3-pip openjdk-8-jdk qemu-user-static setools lzip
           pip3 install beautifulsoup4 lxml
           echo "BUILD_TIME=$(date +"%Y%m%d")" >> $GITHUB_ENV
+          echo "NUM=$(date +%s%N | cut -c 1-6)" >> $GITHUB_ENV
           mkdir done
 
       - name: 查看制作项... (Check what need to build)
@@ -184,10 +185,10 @@ jobs:
           resize2fs -M ${{ matrix.arch }}/product.img
           e2fsck -yf ${{ matrix.arch }}/system_ext.img
           resize2fs -M ${{ matrix.arch }}/system_ext.img
-          mv ${{ matrix.arch }}/system.img ../done
-          mv ${{ matrix.arch }}/vendor.img ../done
-          mv ${{ matrix.arch }}/product.img ../done
-          mv ${{ matrix.arch }}/system_ext.img ../done
+          mv ${{ matrix.arch }}/system.img done
+          mv ${{ matrix.arch }}/vendor.img done
+          mv ${{ matrix.arch }}/product.img done
+          mv ${{ matrix.arch }}/system_ext.img done
           cd ..
 
       - name: 打包文件... (Repack files to zip)
@@ -204,15 +205,17 @@ jobs:
           zip -r $file done/*
 
       - name: 上传至WeTransfer... (Upload to WeTransfer)
+        if: steps.var.outputs.upload_transfer == 'true'
         run: |
            curl -sL https://git.io/file-transfer | sh
            ./transfer wet ${{ env.file }}
 
       - name: 上传至Release... (Upload to Release)
+        if: steps.var.outputs.upload_release == 'true'
         uses: ncipollo/release-action@v1.8.6
         with:
-          artifacts: ${{ env.file }}
-          name: ${{ env.file }}
-          tag: ${{ env.file }}
-          body: "${{ env.file }}"
+          artifacts: ${{ env.file }}-${{ env.NUM }}
+          name: ${{ env.file }}-${{ env.NUM }}
+          tag: ${{ env.file }}-${{ env.NUM }}
+          body: "${{ env.file }}-${{ env.NUM }}"
           token: ${{ secrets.GITHUB_TOKEN }}
