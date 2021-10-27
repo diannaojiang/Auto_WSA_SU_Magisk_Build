@@ -1,0 +1,157 @@
+name: WSA_Kernel_Build
+
+on:
+  workflow_dispatch:
+  
+jobs:
+  WSA_Kernel_Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 获取本仓库源码... (Pull repositorie)
+        uses: actions/checkout@main
+
+      - name: 环境准备... (Installing Path)
+        run: |
+          sudo apt update -y
+          sudo apt install -y bc bison build-essential ccache curl libelf-dev flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev imagemagick libbz2-dev libssl-dev lzma ncftp bash-completion python3 python3-pip openjdk-8-jdk qemu-user-static setools lzip
+          pip3 install beautifulsoup4 lxml
+          echo "BUILD_TIME=$(date +"%Y%m%d")" >> $GITHUB_ENV
+          echo "NUM=$(date +%s%N | cut -c 1-6)" >> $GITHUB_ENV
+
+      - name: 查看制作项... (Check what need to build)
+        run: |
+          echo "::set-output name=SuperUser::$(jq -r '.SuperUser' Options.json)"
+          echo "::set-output name=Magisk::$(jq -r '.Magisk' Options.json)"
+          echo "::set-output name=upload_transfer::$(jq -r '.upload_transfer' Options.json)"
+          echo "::set-output name=upload_release::$(jq -r '.upload_release' Options.json)"
+        id: var
+      
+      - name: 制作SuperUser内核... (Build kernel with SU)
+        if: steps.var.outputs.SuperUser == 'true'
+        run: |
+          git clone https://github.com/lazydev1852/WSA-Linux-Kernel
+          git clone https://github.com/LSPosed/WSA-Kernel-SU
+          cat WSA-Kernel-SU/drivers/base/Kconfig >> WSA-Linux-Kernel/drivers/base/Kconfig
+          sed -i -e '/endmenu/d' WSA-Linux-Kernel/drivers/base/Kconfig
+          sed -i "221 a endmenu" WSA-Linux-Kernel/drivers/base/Kconfig
+          cp WSA-Kernel-SU/drivers/base/superuser.c WSA-Linux-Kernel/drivers/base/
+          sed -i "25 a obj-\$(CONFIG_ASSISTED_SUPERUSER) += superuser.o" WSA-Linux-Kernel/drivers/base/Makefile
+          sed -i 's/CONFIG_LOCALVERSION=\"-windows-subsystem-for-android\"/CONFIG_LOCALVERSION=\"-wsa\"/g' WSA-Linux-Kernel/configs/wsa/config-wsa-5.10
+          sed -i "20 a CONFIG_ASSISTED_SUPERUSER=y" WSA-Linux-Kernel/configs/wsa/config-wsa-5.10
+          cd WSA-Linux-Kernel
+          make KCONFIG_CONFIG=configs/wsa/config-wsa-5.10 -j16
+          mkdir ../done
+          cp arch/x86/boot/bzImage ../done/kernel
+          cd ..
+
+      - name: 加入Magisk... (Add magisk)
+        if: steps.var.outputs.Magisk == 'true'
+        run: |
+          python3 WSA-Download.py
+          python3 Magisk-Download.py
+          e2fsck -yf ${{ matrix.arch }}/system.img
+          resize2fs ${{ matrix.arch }}/system.img 1280M
+          e2fsck -yf ${{ matrix.arch }}/vendor.img
+          resize2fs ${{ matrix.arch }}/vendor.img 320M
+          e2fsck -yf ${{ matrix.arch }}/product.img
+          resize2fs ${{ matrix.arch }}/product.img 1024M
+          e2fsck -yf ${{ matrix.arch }}/system_ext.img
+          resize2fs ${{ matrix.arch }}/system_ext.img 108M
+          sudo mkdir system
+          sudo mount -o loop ${{ matrix.arch }}/system.img system
+          sudo mount -o loop ${{ matrix.arch }}/vendor.img system/vendor
+          sudo mount -o loop ${{ matrix.arch }}/product.img system/product
+          sudo mount -o loop ${{ matrix.arch }}/system_ext.img system/system_ext
+          sudo mkdir system/sbin
+          sudo chcon --reference system/init.environ.rc system/sbin
+          sudo chown root:root system/sbin
+          sudo chmod 0700 system/sbin
+          sudo cp magisk/* system/sbin/
+          sudo find system/sbin -type f -exec chmod 0755 {} \;
+          sudo find system/sbin -type f -exec chown root:root {} \;
+          sudo find system/sbin -type f -exec chcon --reference system/product {} \;
+          chmod +x magisk/magiskpolicy
+          echo '/dev/wsa-magisk(/.*)?    u:object_r:magisk_file:s0' | sudo tee -a system/vendor/etc/selinux/vendor_file_contexts
+          sudo ./magisk/magiskpolicy --load system/vendor/etc/selinux/precompiled_sepolicy --save system/vendor/etc/selinux/precompiled_sepolicy --magisk "allow * magisk_file lnk_file *"
+          sudo tee -a system/system/etc/init/hw/init.rc <<EOF
+          on post-fs-data
+              start logd
+              start adbd
+              mkdir /dev/wsa-magisk
+              mount tmpfs tmpfs /dev/wsa-magisk mode=0755
+              copy /sbin/magisk64 /dev/wsa-magisk/magisk64
+              chmod 0755 /dev/wsa-magisk/magisk64
+              symlink ./magisk64 /dev/wsa-magisk/magisk
+              symlink ./magisk64 /dev/wsa-magisk/su
+              symlink ./magisk64 /dev/wsa-magisk/resetprop
+              copy /sbin/magisk32 /dev/wsa-magisk/magisk32
+              chmod 0755 /dev/wsa-magisk/magisk32
+              copy /sbin/magiskinit /dev/wsa-magisk/magiskinit
+              chmod 0755 /dev/wsa-magisk/magiskinit
+              symlink ./magiskinit /dev/wsa-magisk/magiskpolicy
+              mkdir /dev/wsa-magisk/.magisk 700
+              mkdir /dev/wsa-magisk/.magisk/mirror 700
+              mkdir /dev/wsa-magisk/.magisk/block 700
+              rm /dev/.magisk_unblock
+              start FAhW7H9G5sf
+              wait /dev/.magisk_unblock 40
+              rm /dev/.magisk_unblock
+          service FAhW7H9G5sf /dev/wsa-magisk/magisk --post-fs-data
+              user root
+              seclabel u:r:magisk:s0
+              oneshot
+          service HLiFsR1HtIXVN6 /dev/wsa-magisk/magisk --service
+              class late_start
+              user root
+              seclabel u:r:magisk:s0
+              oneshot
+          on property:sys.boot_completed=1
+              start YqCTLTppv3ML
+          service YqCTLTppv3ML /dev/wsa-magisk/magisk --boot-complete
+              user root
+              seclabel u:r:magisk:s0
+              oneshot
+          EOF
+          sudo umount system/vendor
+          sudo umount system/product
+          sudo umount system/system_ext
+          sudo umount system
+          e2fsck -yf ${{ matrix.arch }}/system.img
+          resize2fs -M ${{ matrix.arch }}/system.img
+          e2fsck -yf ${{ matrix.arch }}/vendor.img
+          resize2fs -M ${{ matrix.arch }}/vendor.img
+          e2fsck -yf ${{ matrix.arch }}/product.img
+          resize2fs -M ${{ matrix.arch }}/product.img
+          e2fsck -yf ${{ matrix.arch }}/system_ext.img
+          resize2fs -M ${{ matrix.arch }}/system_ext.img
+          mv ${{ matrix.arch }}/system.img ../done
+          mv ${{ matrix.arch }}/vendor.img ../done
+          mv ${{ matrix.arch }}/product.img ../done
+          mv ${{ matrix.arch }}/system_ext.img ../done
+          cd ..
+
+      - name: 打包文件... (Repack files to zip)
+        run: |
+          if [[ steps.var.outputs.SuperUser == 'true' ]]; then
+            su=SU
+          fi
+          if [[ steps.var.outputs.Magisk == 'true' ]]; then
+            mag=-Magisk
+          fi
+          echo 'WSA-'$su$mag'.zip' > temp.txt
+          echo "file=$(cat temp.txt)" >> $GITHUB_ENV
+          zip -q -r ${{ env.file }} done/*
+
+      - name: 上传至WeTransfer... (Upload to WeTransfer)
+        run: |
+           curl -sL https://git.io/file-transfer | sh
+           ./transfer wet ${{ env.file }}
+
+      - name: 上传至Release... (Upload to Release)
+        uses: ncipollo/release-action@v1.8.6
+        with:
+          artifacts: ${{ env.file }}
+          name: ${{ env.file }}
+          tag: ${{ env.file }}
+          body: "${{ env.file }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
