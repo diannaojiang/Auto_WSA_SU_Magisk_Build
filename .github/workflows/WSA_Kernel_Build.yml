@@ -6,6 +6,9 @@ on:
 jobs:
   WSA_Kernel_Build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64]
     steps:
       - name: 获取本仓库源码... (Pull repositorie)
         uses: actions/checkout@main
@@ -44,11 +47,67 @@ jobs:
           cp arch/x86/boot/bzImage ../done/kernel
           cd ..
 
-      - name: 加入Magisk... (Add magisk)
+      - name: 下载Windows Subsystem for Android... (Download WSA)
+        if: steps.var.outputs.Magisk == 'true'
+        shell: python
+        run: |
+          import requests
+          from bs4 import BeautifulSoup
+          import re
+          import zipfile
+          import os
+          import urllib.request
+          res = requests.post("https://store.rg-adguard.net/api/GetFiles", "type=CategoryId&url=858014f3-3934-4abe-8078-4aa193e74ca8&ring=WIS&lang=en-US", headers={
+              "content-type": "application/x-www-form-urlencoded"
+          })
+          html = BeautifulSoup(res.content, "lxml")
+          a = html.find("a", string=re.compile("MicrosoftCorporationII\.WindowsSubsystemForAndroid_.*\.msixbundle"))
+          link = a["href"]
+          out_file = "wsa.zip"
+          arch = "${{ matrix.arch }}"
+          if not os.path.isfile(out_file):
+              urllib.request.urlretrieve(link, out_file)
+          zip_name = ""
+          with zipfile.ZipFile(out_file) as zip:
+              for f in zip.filelist:
+                  if arch in f.filename.lower():
+                      zip_name = f.filename
+                      if not os.path.isfile(zip_name):
+                          zip.extract(f)
+                      break
+          with zipfile.ZipFile(zip_name) as zip:
+              if not os.path.isdir(arch):
+                  print(f"unzipping from {zip_name}", flush=True)
+                  zip.extractall(arch)
+
+      - name: 下载Magisk... (Download Magisk)
+        if: steps.var.outputs.Magisk == 'true'
+        shell: python
+        run: |
+          import urllib.request
+          import zipfile
+          import os
+          magisk_apk = """${{ github.event.inputs.magisk_apk }}"""
+          if not magisk_apk:
+              magisk_apk = """https://raw.githubusercontent.com/LSPosed/MagiskOnWSA/main/magisk.apk"""
+          out_file = "magisk.zip"
+          arch = "${{ matrix.arch }}"
+          abi_map={"x64" : ["x86_64", "x86"]}
+          if not os.path.isfile(out_file):
+              urllib.request.urlretrieve(magisk_apk, out_file)
+          def extract_as(zip, name, as_name, dir):
+              info = zip.getinfo(name)
+              info.filename = as_name
+              zip.extract(info, dir)
+          with zipfile.ZipFile(out_file) as zip:
+              extract_as(zip, f"lib/{ abi_map[arch][0] }/libmagisk64.so", "magisk64", "magisk")
+              extract_as(zip, f"lib/{ abi_map[arch][1] }/libmagisk32.so", "magisk32", "magisk")
+              extract_as(zip, f"lib/{ abi_map[arch][0] }/libmagiskinit.so", "magiskinit", "magisk")
+              extract_as(zip, f"lib/{ abi_map['x64'][0] }/libmagiskinit.so", "magiskpolicy", "magisk")
+              
+      - name: 修补Magisk... (Patch Magisk)
         if: steps.var.outputs.Magisk == 'true'
         run: |
-          python3 WSA-Download.py
-          python3 Magisk-Download.py
           e2fsck -yf ${{ matrix.arch }}/system.img
           resize2fs ${{ matrix.arch }}/system.img 1280M
           e2fsck -yf ${{ matrix.arch }}/vendor.img
