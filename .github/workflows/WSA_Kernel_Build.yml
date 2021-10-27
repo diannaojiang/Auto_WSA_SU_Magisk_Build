@@ -27,7 +27,7 @@ jobs:
           echo "::set-output name=upload_transfer::$(jq -r '.upload_transfer' Options.json)"
           echo "::set-output name=upload_release::$(jq -r '.upload_release' Options.json)"
           echo "SupperUser=$(cat Options.json | grep SuperUser | cut -d \" -f 4)" >> $GITHUB_ENV
-          echo "Magiskk=$cat Options.json | grep Magisk | cut -d \" -f 4)" >> $GITHUB_ENV
+          echo "Magiskk=$(cat Options.json | grep Magisk | cut -d \" -f 4)" >> $GITHUB_ENV
         id: var
       
       - name: 制作SuperUser内核... (Build kernel with SU)
