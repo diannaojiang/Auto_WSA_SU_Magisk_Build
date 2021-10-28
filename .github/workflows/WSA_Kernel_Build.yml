@@ -32,24 +32,6 @@ jobs:
           echo "Magiskk=$(cat Options.json | grep Magisk | cut -d \" -f 4)" >> $GITHUB_ENV
         id: var
       
-      - name: 制作SuperUser内核... (Build kernel with SU)
-        if: steps.var.outputs.SuperUser == 'true'
-        run: |
-          git clone https://github.com/lazydev1852/WSA-Linux-Kernel
-          git clone https://github.com/LSPosed/WSA-Kernel-SU
-          cat WSA-Kernel-SU/drivers/base/Kconfig >> WSA-Linux-Kernel/drivers/base/Kconfig
-          sed -i -e '/endmenu/d' WSA-Linux-Kernel/drivers/base/Kconfig
-          sed -i "221 a endmenu" WSA-Linux-Kernel/drivers/base/Kconfig
-          cp WSA-Kernel-SU/drivers/base/superuser.c WSA-Linux-Kernel/drivers/base/
-          sed -i "25 a obj-\$(CONFIG_ASSISTED_SUPERUSER) += superuser.o" WSA-Linux-Kernel/drivers/base/Makefile
-          sed -i 's/CONFIG_LOCALVERSION=\"-windows-subsystem-for-android\"/CONFIG_LOCALVERSION=\"-wsa\"/g' WSA-Linux-Kernel/configs/wsa/config-wsa-5.10
-          sed -i "20 a CONFIG_ASSISTED_SUPERUSER=y" WSA-Linux-Kernel/configs/wsa/config-wsa-5.10
-          cd WSA-Linux-Kernel
-          make KCONFIG_CONFIG=configs/wsa/config-wsa-5.10 -j16
-          cp arch/x86/boot/bzImage ../done/kernel
-          cd ..
-          rm -rf WSA-Linux-Kernel
-          df -h
       - name: 下载Windows Subsystem for Android... (Download WSA)
         if: steps.var.outputs.Magisk == 'true'
         shell: python
@@ -191,6 +173,23 @@ jobs:
           mv ${{ matrix.arch }}/vendor.img done
           mv ${{ matrix.arch }}/product.img done
           mv ${{ matrix.arch }}/system_ext.img done
+          cd ..
+
+      - name: 制作SuperUser内核... (Build kernel with SU)
+        if: steps.var.outputs.SuperUser == 'true'
+        run: |
+          git clone https://github.com/lazydev1852/WSA-Linux-Kernel
+          git clone https://github.com/LSPosed/WSA-Kernel-SU
+          cat WSA-Kernel-SU/drivers/base/Kconfig >> WSA-Linux-Kernel/drivers/base/Kconfig
+          sed -i -e '/endmenu/d' WSA-Linux-Kernel/drivers/base/Kconfig
+          sed -i "221 a endmenu" WSA-Linux-Kernel/drivers/base/Kconfig
+          cp WSA-Kernel-SU/drivers/base/superuser.c WSA-Linux-Kernel/drivers/base/
+          sed -i "25 a obj-\$(CONFIG_ASSISTED_SUPERUSER) += superuser.o" WSA-Linux-Kernel/drivers/base/Makefile
+          sed -i 's/CONFIG_LOCALVERSION=\"-windows-subsystem-for-android\"/CONFIG_LOCALVERSION=\"-wsa\"/g' WSA-Linux-Kernel/configs/wsa/config-wsa-5.10
+          sed -i "20 a CONFIG_ASSISTED_SUPERUSER=y" WSA-Linux-Kernel/configs/wsa/config-wsa-5.10
+          cd WSA-Linux-Kernel
+          make KCONFIG_CONFIG=configs/wsa/config-wsa-5.10 -j16
+          cp arch/x86/boot/bzImage ../done/kernel
           cd ..
 
       - name: 打包文件... (Repack files to zip)
