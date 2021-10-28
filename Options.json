@@ -1,5 +1,5 @@
 {
-  "SuperUser": "false",
+  "SuperUser": "true",
   "Magisk": "true",
   "upload_transfer": "false",
   "upload_release": "true"
