@@ -215,7 +215,7 @@ jobs:
         if: steps.var.outputs.upload_release == 'true'
         uses: ncipollo/release-action@v1.8.6
         with:
-          artifacts: ${{ env.file }}-${{ env.NUM }}
+          artifacts: ${{ env.file }}
           name: ${{ env.file }}-${{ env.NUM }}
           tag: ${{ env.file }}-${{ env.NUM }}
           body: "${{ env.file }}-${{ env.NUM }}"
