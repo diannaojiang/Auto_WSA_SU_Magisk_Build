@@ -16,7 +16,7 @@ jobs:
       - name: 环境准备... (Installing Path)
         run: |
           sudo apt update -y
-          sudo apt install -y bc bison build-essential ccache curl libelf-dev flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev imagemagick libbz2-dev libssl-dev lzma ncftp bash-completion python3 python3-pip openjdk-8-jdk qemu-user-static setools lzip
+          sudo apt install -y curl git libssl-dev python3 python3-pip openjdk-8-jdksetools lzip
           pip3 install beautifulsoup4 lxml
           echo "BUILD_TIME=$(date +"%Y%m%d")" >> $GITHUB_ENV
           echo "NUM=$(date +%s%N | cut -c 1-6)" >> $GITHUB_ENV
@@ -49,7 +49,7 @@ jobs:
           cp arch/x86/boot/bzImage ../done/kernel
           cd ..
           rm -rf WSA-Linux-Kernel
-
+          df -h
       - name: 下载Windows Subsystem for Android... (Download WSA)
         if: steps.var.outputs.Magisk == 'true'
         shell: python
@@ -111,6 +111,7 @@ jobs:
       - name: 修补Magisk... (Patch Magisk)
         if: steps.var.outputs.Magisk == 'true'
         run: |
+          rm -rf wsa.zip
           e2fsck -yf ${{ matrix.arch }}/system.img
           resize2fs ${{ matrix.arch }}/system.img 1280M
           e2fsck -yf ${{ matrix.arch }}/vendor.img
