@@ -48,6 +48,7 @@ jobs:
           make KCONFIG_CONFIG=configs/wsa/config-wsa-5.10 -j16
           cp arch/x86/boot/bzImage ../done/kernel
           cd ..
+          rm -rf WSA-Linux-Kernel
 
       - name: 下载Windows Subsystem for Android... (Download WSA)
         if: steps.var.outputs.Magisk == 'true'
